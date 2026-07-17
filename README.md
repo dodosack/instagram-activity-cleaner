@@ -1,8 +1,8 @@
-# instagram-bulk-likes-remover
+# instagram-activity-cleaner
 
-Remove your own Instagram likes in bulk from the browser console. No login
-details, no external server, no extension. The scripts click Instagram's own
-"Select" and "Unlike" buttons for you.
+Remove your own Instagram likes and comments in bulk from the browser console.
+No login details, no external server, no extension. The scripts click
+Instagram's own "Select", "Unlike", and "Delete" buttons for you.
 
 ## Read this first
 
