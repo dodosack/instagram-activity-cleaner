@@ -19,6 +19,7 @@
   // ===== settings =====
   const BATCH_MIN   = 5;      // fewest items selected per cycle (randomized)
   const BATCH_MAX   = 10;     // most items selected per cycle (randomized)
+  const MAX_BATCH   = 100;    // hard cap - Instagram deselects past ~100 per action (and can 500)
   const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
   const MAX_TOTAL   = 200;    // stop after this many this session (rate-limit guard)
   const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
@@ -67,7 +68,7 @@
 
     // Select a randomized batch. Instagram keeps only ~25 rows in the DOM at a
     // time, so scroll to load more until we reach the target (or run out).
-    const target = rnd(BATCH_MIN, BATCH_MAX + 1);
+    const target = Math.min(rnd(BATCH_MIN, BATCH_MAX + 1), MAX_BATCH);
     const skipped = new Set();
     let sel = 0, emptyScrolls = 0;
     while (sel < target && !window.__STOP__ && emptyScrolls < 4) {

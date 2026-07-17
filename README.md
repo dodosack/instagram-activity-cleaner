@@ -116,6 +116,7 @@ longer pause, so the pattern looks less automated:
 ```js
 const BATCH_MIN   = 5;      // fewest selected per cycle (randomized)
 const BATCH_MAX   = 10;     // most selected per cycle (randomized)
+const MAX_BATCH   = 100;    // hard cap per cycle (see below)
 const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
 const MAX_TOTAL   = 200;    // stop after this many this session
 const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
@@ -125,6 +126,14 @@ const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycle
 
 Skipped items are not lost — they stay unselected and get picked up in a later
 cycle.
+
+**Batch size is capped at ~100.** The page only keeps ~25 rows in the DOM, so
+the scripts scroll to load more until the batch is full. But Instagram's own
+multi-select only allows about **100 at once** — past that it starts
+deselecting, and asking it to unlike/delete a too-large batch can return an
+HTTP 500 and leave the page stuck (you then have to reload and start the run
+again). `MAX_BATCH = 100` keeps you under that. If you still hit 500s or a stuck
+page, lower `BATCH_MAX`.
 
 - **Start:** paste and press Enter.
 - **Stop:** type `window.__STOP__ = true` and press Enter. It stops after the
