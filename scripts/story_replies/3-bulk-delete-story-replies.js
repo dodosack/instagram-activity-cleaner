@@ -65,19 +65,29 @@
     }
     if (icons.length === 0) { console.log("Nothing left."); break; }
 
-    // Select a randomized batch, occasionally skipping an item (human-like).
+    // Select a randomized batch. Instagram keeps only ~25 rows in the DOM at a
+    // time, so scroll to load more until we reach the target (or run out).
     const target = rnd(BATCH_MIN, BATCH_MAX + 1);
-    let sel = 0;
-    for (const icon of icons) {
-      if (sel >= target) break;
-      icon.scrollIntoView({ behavior: "smooth", block: "center" });
-      await sleep(400);
-      const btn = icon.closest('[role="button"]');
-      if (!btn) continue;
-      if (Math.random() < SKIP_CHANCE) continue; // skip this one; it stays for a later cycle
-      realClick(btn);
-      sel++;
-      await sleep(rnd(450, 1100));
+    const skipped = new Set();
+    let sel = 0, emptyScrolls = 0;
+    while (sel < target && !window.__STOP__ && emptyScrolls < 4) {
+      let picked = 0;
+      for (const icon of getIcons()) {
+        if (sel >= target) break;
+        if (skipped.has(icon)) continue;
+        const btn = icon.closest('[role="button"]');
+        if (!btn) continue;
+        if (Math.random() < SKIP_CHANCE) { skipped.add(icon); continue; } // stays for a later cycle
+        realClick(btn);
+        sel++;
+        picked++;
+        await sleep(rnd(450, 1100));
+      }
+      if (sel < target) {
+        window.scrollBy(0, 1600);            // load more rows
+        await sleep(1100);
+        emptyScrolls = picked === 0 ? emptyScrolls + 1 : 0;
+      }
     }
     if (sel === 0) { console.log("Nothing selectable. Done."); break; }
 
