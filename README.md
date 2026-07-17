@@ -1,8 +1,9 @@
 # instagram-activity-cleaner
 
-Remove your own Instagram likes, comments, and reposts in bulk from the
-browser console. No login details, no external server, no extension. The
-scripts click Instagram's own "Select", "Unlike", and "Delete" buttons for you.
+Remove your own Instagram likes, comments, reposts, and story replies in bulk
+from the browser console. No login details, no external server, no extension.
+The scripts click Instagram's own "Select", "Unlike", and "Delete" buttons for
+you.
 
 ## Read this first
 
@@ -26,10 +27,11 @@ https://www.instagram.com/your_activity/interactions/likes
 You can also reach it in the app/site menu:
 Profile menu → **Your activity** → **Interactions** → **Likes**.
 
-Comments and reposts are on their own pages:
+Comments, reposts, and story replies are on their own pages:
 `https://www.instagram.com/your_activity/interactions/comments`
 `https://www.instagram.com/your_activity/interactions/reposts`
-(Profile menu → **Your activity** → **Interactions** → **Comments** / **Reposts**).
+`https://www.instagram.com/your_activity/interactions/story_replies`
+(Profile menu → **Your activity** → **Interactions** → **Comments** / **Reposts** / **Story replies**).
 
 ## How to run
 
@@ -70,6 +72,18 @@ above) before running a group, and run the files in number order.
 | `1-diagnose-reposts.js` | Turns on selection mode, checks selectors | no |
 | `2-mini-test-3-reposts.js` | Removes up to 3 reposts so you see the flow | yes, 3 |
 | `3-bulk-remove-reposts.js` | Loops and removes reposts in batches | yes |
+
+**Story replies** — `scripts/story_replies/` — page `.../interactions/story_replies`
+
+| File | What it does | Deletes? |
+|------|--------------|----------|
+| `1-diagnose-story-replies.js` | Turns on selection mode, checks selectors | no |
+| `2-mini-test-3-story-replies.js` | Deletes 3 story replies so you see the flow | yes, 3 |
+| `3-bulk-delete-story-replies.js` | Loops and deletes story replies in batches | yes |
+
+Comments, reposts, and story replies all use the same delete flow (Select →
+pick → Delete → confirm), so those three groups are near-identical; only likes
+differ (they use "Unlike").
 
 Doing the diagnose and mini-test first is how you find out whether it still
 works before you delete anything at scale. Instagram changes its markup, so
