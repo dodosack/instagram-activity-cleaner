@@ -80,6 +80,17 @@ number and it depends on the account.
 - If you see "action blocked" or "try again later", stop and wait 24-48h.
   The bulk script stops on its own if it detects that message.
 
+## Credits
+
+The core of this project (how to find and click Instagram's Select / Unlike /
+Delete buttons) is derived from Chidi's work:
+
+- [iamceeso/instagram-bulk-likes-remover](https://github.com/iamceeso/instagram-bulk-likes-remover)
+- [iamceeso/instagram-bulk-comment-deleter](https://github.com/iamceeso/instagram-bulk-comment-deleter)
+
+This repo adds read-only checks, a small test step, a session limit,
+action-block detection, and the docs.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

@@ -1,6 +1,9 @@
 /*
  * Step 4 - Bulk unlike (loops until the session limit or no likes left)
  *
+ * Selectors and click flow derived from Chidi's MIT-licensed
+ * instagram-bulk-likes-remover (github.com/iamceeso).
+ *
  * WARNING: this deletes real data and cannot be undone automatically.
  * Read the code before you run it. Do not run scripts you have not read.
  *
