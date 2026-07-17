@@ -1,8 +1,8 @@
 # instagram-activity-cleaner
 
-Remove your own Instagram likes and comments in bulk from the browser console.
-No login details, no external server, no extension. The scripts click
-Instagram's own "Select", "Unlike", and "Delete" buttons for you.
+Remove your own Instagram likes, comments, and reposts in bulk from the
+browser console. No login details, no external server, no extension. The
+scripts click Instagram's own "Select", "Unlike", and "Delete" buttons for you.
 
 ## Read this first
 
@@ -26,9 +26,10 @@ https://www.instagram.com/your_activity/interactions/likes
 You can also reach it in the app/site menu:
 Profile menu → **Your activity** → **Interactions** → **Likes**.
 
-Comments are on a separate page:
+Comments and reposts are on their own pages:
 `https://www.instagram.com/your_activity/interactions/comments`
-(Profile menu → **Your activity** → **Interactions** → **Comments**).
+`https://www.instagram.com/your_activity/interactions/reposts`
+(Profile menu → **Your activity** → **Interactions** → **Comments** / **Reposts**).
 
 ## How to run
 
@@ -42,37 +43,55 @@ The scripts assume your Instagram UI is in **English** (labels `Select` and
 
 ## Scripts
 
-Run them in order the first time. Likes and comments are separate; open the
-matching page (see above) before running each group.
+Each type has its own folder under `scripts/`. Open the matching page (see
+above) before running a group, and run the files in number order.
 
-**Likes** — page `.../interactions/likes`
-
-| File | What it does | Deletes? |
-|------|--------------|----------|
-| `scripts/01-diagnose.js` | Checks the selectors match the current UI | no |
-| `scripts/02-check-select-mode.js` | Turns on selection mode, counts likes | no |
-| `scripts/03-mini-test-3-likes.js` | Removes 3 likes so you see the flow | yes, 3 |
-| `scripts/04-bulk-unlike.js` | Loops and removes likes in batches | yes |
-
-**Comments** — page `.../interactions/comments`
+**Likes** — `scripts/likes/` — page `.../interactions/likes`
 
 | File | What it does | Deletes? |
 |------|--------------|----------|
-| `scripts/05-diagnose-comments.js` | Turns on selection mode, checks selectors | no |
-| `scripts/06-mini-test-3-comments.js` | Deletes 3 comments so you see the flow | yes, 3 |
-| `scripts/07-bulk-delete-comments.js` | Loops and deletes comments in batches | yes |
+| `1-diagnose.js` | Checks the selectors match the current UI | no |
+| `2-check-select-mode.js` | Turns on selection mode, counts likes | no |
+| `3-mini-test-3-likes.js` | Removes 3 likes so you see the flow | yes, 3 |
+| `4-bulk-unlike.js` | Loops and removes likes in batches | yes |
+
+**Comments** — `scripts/comments/` — page `.../interactions/comments`
+
+| File | What it does | Deletes? |
+|------|--------------|----------|
+| `1-diagnose-comments.js` | Turns on selection mode, checks selectors | no |
+| `2-mini-test-3-comments.js` | Deletes 3 comments so you see the flow | yes, 3 |
+| `3-bulk-delete-comments.js` | Loops and deletes comments in batches | yes |
+
+**Reposts** — `scripts/reposts/` — page `.../interactions/reposts`
+
+| File | What it does | Deletes? |
+|------|--------------|----------|
+| `1-diagnose-reposts.js` | Turns on selection mode, checks selectors | no |
+| `2-mini-test-3-reposts.js` | Removes up to 3 reposts so you see the flow | yes, 3 |
+| `3-bulk-remove-reposts.js` | Loops and removes reposts in batches | yes |
 
 Doing the diagnose and mini-test first is how you find out whether it still
 works before you delete anything at scale. Instagram changes its markup, so
 the selectors can break; the diagnose step tells you early.
 
-The comments page uses a different delete button than likes, so the comment
-scripts are not the same as the like scripts.
+Each page uses slightly different controls, so the three groups are not
+interchangeable.
+
+### Reposts: known Instagram issue
+
+Reposts delete unreliably on Instagram's side right now. With the default
+"Newest to oldest" order, Instagram often shows a "deleted" toast but leaves
+the repost in place — this happens **when you delete by hand too**, so it is
+not caused by these scripts. Sorting **Oldest to newest** (Sort & filter)
+before you start makes it much more reliable, but Instagram may still fail or
+rate-limit after a while. If nothing is actually disappearing, stop and try
+again later. The bulk script verifies the selection registered before deleting
+so it won't report fake successes.
 
 ## Bulk script
 
-Both bulk scripts (`04-bulk-unlike.js` and `07-bulk-delete-comments.js`) have
-the same settings at the top:
+All three bulk scripts have the same settings at the top:
 
 ```js
 const BATCH     = 8;      // likes per cycle
@@ -105,7 +124,8 @@ Delete buttons) is derived from Chidi's work:
 - [iamceeso/instagram-bulk-comment-deleter](https://github.com/iamceeso/instagram-bulk-comment-deleter)
 
 This repo adds read-only checks, a small test step, a session limit,
-action-block detection, and the docs.
+action-block detection, the reposts support (worked out separately, since the
+reposts confirm is a React popup that needs a leaf-level click), and the docs.
 
 ## License
 
