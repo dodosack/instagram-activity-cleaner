@@ -26,8 +26,9 @@ https://www.instagram.com/your_activity/interactions/likes
 You can also reach it in the app/site menu:
 Profile menu → **Your activity** → **Interactions** → **Likes**.
 
-Comments live on a separate page and are **not** covered yet:
+Comments are on a separate page:
 `https://www.instagram.com/your_activity/interactions/comments`
+(Profile menu → **Your activity** → **Interactions** → **Comments**).
 
 ## How to run
 
@@ -41,7 +42,10 @@ The scripts assume your Instagram UI is in **English** (labels `Select` and
 
 ## Scripts
 
-Run them in this order the first time.
+Run them in order the first time. Likes and comments are separate; open the
+matching page (see above) before running each group.
+
+**Likes** — page `.../interactions/likes`
 
 | File | What it does | Deletes? |
 |------|--------------|----------|
@@ -50,13 +54,25 @@ Run them in this order the first time.
 | `scripts/03-mini-test-3-likes.js` | Removes 3 likes so you see the flow | yes, 3 |
 | `scripts/04-bulk-unlike.js` | Loops and removes likes in batches | yes |
 
-Doing 01 → 02 → 03 first is how you find out whether it still works before
-you delete anything at scale. Instagram changes its markup, so the selectors
-can break; the diagnose step tells you early.
+**Comments** — page `.../interactions/comments`
+
+| File | What it does | Deletes? |
+|------|--------------|----------|
+| `scripts/05-diagnose-comments.js` | Turns on selection mode, checks selectors | no |
+| `scripts/06-mini-test-3-comments.js` | Deletes 3 comments so you see the flow | yes, 3 |
+| `scripts/07-bulk-delete-comments.js` | Loops and deletes comments in batches | yes |
+
+Doing the diagnose and mini-test first is how you find out whether it still
+works before you delete anything at scale. Instagram changes its markup, so
+the selectors can break; the diagnose step tells you early.
+
+The comments page uses a different delete button than likes, so the comment
+scripts are not the same as the like scripts.
 
 ## Bulk script
 
-Settings are at the top of `scripts/04-bulk-unlike.js`:
+Both bulk scripts (`04-bulk-unlike.js` and `07-bulk-delete-comments.js`) have
+the same settings at the top:
 
 ```js
 const BATCH     = 8;      // likes per cycle
