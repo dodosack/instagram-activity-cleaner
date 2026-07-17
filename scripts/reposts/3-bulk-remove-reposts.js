@@ -24,10 +24,13 @@
  */
 (async function bulkRemoveReposts() {
   // ===== settings =====
-  const BATCH     = 6;      // reposts selected per cycle
-  const MAX_TOTAL = 50;     // stop after this many this session
-  const MIN_PAUSE = 18000;
-  const MAX_PAUSE = 30000;
+  const BATCH_MIN   = 4;      // fewest reposts selected per cycle (randomized)
+  const BATCH_MAX   = 7;      // most reposts selected per cycle (randomized)
+  const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
+  const MAX_TOTAL   = 50;     // stop after this many this session
+  const MIN_PAUSE   = 18000;
+  const MAX_PAUSE   = 30000;
+  const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
   // ====================
 
   window.__STOP__ = false;
@@ -92,13 +95,15 @@
       if (!icons.length) { console.log("No reposts left."); break; }
     }
 
-    // select a batch
+    // select a randomized batch, occasionally skipping an item (human-like)
+    const target = rnd(BATCH_MIN, BATCH_MAX + 1);
     let sel = 0;
     for (const icon of icons) {
-      if (sel >= BATCH || total + sel >= MAX_TOTAL) break;
+      if (sel >= target || total + sel >= MAX_TOTAL) break;
+      if (Math.random() < SKIP_CHANCE) continue; // skip this one; it stays for a later cycle
       realClick(icon.closest('[role="button"]') || icon);
       sel++;
-      await sleep(rnd(500, 800));
+      await sleep(rnd(450, 1000));
     }
     if (!sel) { console.log("Nothing selectable. Done."); break; }
 
@@ -126,7 +131,8 @@
     cycle++;
     console.log(`Cycle ${cycle}: removed ${verified} (selected ${sel}) | total ${total}/${MAX_TOTAL}`);
 
-    await sleep(rnd(MIN_PAUSE, MAX_PAUSE));
+    // vary the pause; now and then take a longer break like a human would
+    await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE));
   }
 
   console.log(`%cStopped. Removed ${total} reposts in ${cycle} cycles.`, "color:lime;font-weight:bold");

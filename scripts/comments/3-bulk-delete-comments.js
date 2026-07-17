@@ -18,10 +18,13 @@
  */
 (async function bulkDeleteComments() {
   // ===== settings =====
-  const BATCH     = 8;      // comments per cycle
-  const MAX_TOTAL = 200;    // stop after this many comments this session (rate-limit guard)
-  const MIN_PAUSE = 18000;  // min pause between cycles (ms)
-  const MAX_PAUSE = 30000;  // max pause between cycles (ms)
+  const BATCH_MIN   = 5;      // fewest comments selected per cycle (randomized)
+  const BATCH_MAX   = 10;     // most comments selected per cycle (randomized)
+  const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
+  const MAX_TOTAL   = 200;    // stop after this many comments this session (rate-limit guard)
+  const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
+  const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
+  const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
   // ====================
 
   window.__STOP__ = false;
@@ -63,17 +66,19 @@
     }
     if (icons.length === 0) { console.log("No comments left."); break; }
 
-    // Select a batch.
+    // Select a randomized batch, occasionally skipping an item (human-like).
+    const target = rnd(BATCH_MIN, BATCH_MAX + 1);
     let sel = 0;
     for (const icon of icons) {
-      if (sel >= BATCH) break;
+      if (sel >= target) break;
       icon.scrollIntoView({ behavior: "smooth", block: "center" });
       await sleep(400);
       const btn = icon.closest('[role="button"]');
       if (!btn) continue;
+      if (Math.random() < SKIP_CHANCE) continue; // skip this one; it stays for a later cycle
       realClick(btn);
       sel++;
-      await sleep(rnd(500, 900));
+      await sleep(rnd(450, 1100));
     }
     if (sel === 0) { console.log("Nothing selectable. Done."); break; }
 
@@ -95,7 +100,8 @@
     cycle++;
     console.log(`Cycle ${cycle}: deleted ${sel} | total ${total}/${MAX_TOTAL}`);
 
-    await sleep(rnd(MIN_PAUSE, MAX_PAUSE));
+    // vary the pause; now and then take a longer break like a human would
+    await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE));
   }
 
   console.log(`%cStopped. Deleted ${total} comments in ${cycle} cycles.`, "color:lime;font-weight:bold");

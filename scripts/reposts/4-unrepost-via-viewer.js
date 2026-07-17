@@ -33,9 +33,10 @@
  */
 (async function unrepostViaViewer() {
   // ===== settings =====
-  const MAX       = 20;    // how many to un-repost this run
-  const MIN_PAUSE = 2500;  // ms between actions (keep it slow)
-  const MAX_PAUSE = 4000;
+  const MAX        = 20;    // how many to un-repost this run
+  const MIN_PAUSE  = 2500;  // ms between actions (keep it slow)
+  const MAX_PAUSE  = 4000;
+  const LONG_BREAK = 0.15;  // chance of a longer human-like pause between actions
   // ====================
 
   window.__STOP__ = false;
@@ -78,8 +79,14 @@
   console.log("%cStart (viewer popover flow). Stop: window.__STOP__ = true", "color:cyan;font-weight:bold");
 
   while (!window.__STOP__ && done < MAX) {
-    const rs = repostSvg();
-    if (!rs) { console.log("No Repost icon - are you in the post viewer? Done."); break; }
+    // wait for the repost icon to load - reels/videos render slower, so don't
+    // give up on the first miss
+    let rs = repostSvg();
+    for (let i = 0; i < 12 && !rs && !window.__STOP__; i++) {
+      await sleep(500);
+      rs = repostSvg();
+    }
+    if (!rs) { console.log("No Repost icon after waiting ~6s - reached the end. Done."); break; }
 
     // open the popover
     realClick(rs.closest('[role="button"]') || rs.parentElement || rs);
@@ -91,12 +98,12 @@
       break;
     }
     realClick(del);
-    await sleep(rnd(MIN_PAUSE, MAX_PAUSE));
+    await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 15000) : rnd(MIN_PAUSE, MAX_PAUSE));
     done++;
     console.log(`un-reposted ${done}/${MAX}`);
 
     if (!clickNext()) { console.log("No Next button - reached the last one. Done."); break; }
-    await sleep(rnd(MIN_PAUSE, MAX_PAUSE));
+    await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 15000) : rnd(MIN_PAUSE, MAX_PAUSE));
   }
 
   console.log(`%cStopped. Un-reposted ${done}. Reload your profile to confirm.`, "color:lime;font-weight:bold");

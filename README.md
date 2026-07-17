@@ -109,14 +109,22 @@ so it won't report fake successes.
 
 ## Bulk script
 
-All three bulk scripts have the same settings at the top:
+The bulk scripts share the same settings at the top. The batch size is
+randomized each cycle and the scripts occasionally skip an item or take a
+longer pause, so the pattern looks less automated:
 
 ```js
-const BATCH     = 8;      // likes per cycle
-const MAX_TOTAL = 200;    // stop after this many this session
-const MIN_PAUSE = 18000;  // min pause between cycles (ms)
-const MAX_PAUSE = 30000;  // max pause between cycles (ms)
+const BATCH_MIN   = 5;      // fewest selected per cycle (randomized)
+const BATCH_MAX   = 10;     // most selected per cycle (randomized)
+const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
+const MAX_TOTAL   = 200;    // stop after this many this session
+const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
+const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
+const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
 ```
+
+Skipped items are not lost — they stay unselected and get picked up in a later
+cycle.
 
 - **Start:** paste and press Enter.
 - **Stop:** type `window.__STOP__ = true` and press Enter. It stops after the
