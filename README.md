@@ -150,6 +150,14 @@ number and it depends on the account.
 - If you see "action blocked" or "try again later", stop and wait 24-48h.
   The bulk script stops on its own if it detects that message.
 
+**HTTP 500 = rate limiting.** After a burst (often ~100-150 actions in a short
+run, regardless of batch size) Instagram starts returning `500` on the
+unlike/delete request and the page can get stuck. This is throttling, not a bug
+in the script. The bulk scripts watch for it and **stop cleanly** with a clear
+message instead of pretending the list is empty. When it happens: reload the
+page and wait a while (30-60+ minutes, sometimes longer) before running again.
+Smaller sessions and longer pauses make it happen less.
+
 ## Credits
 
 The core of this project (how to find and click Instagram's Select / Unlike /

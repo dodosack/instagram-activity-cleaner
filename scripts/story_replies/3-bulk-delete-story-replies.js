@@ -30,6 +30,20 @@
   window.__STOP__ = false;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const rnd = (a, b) => a + Math.floor(Math.random() * (b - a));
+
+  // Watch Instagram's own action requests. A 500 here is almost always rate
+  // limiting after a burst, not a bug - we detect it and stop cleanly instead
+  // of misreporting "Nothing left" when the page has actually broken.
+  let httpError = null;
+  const __origFetch = window.fetch;
+  window.fetch = function (...a) {
+    const p = __origFetch.apply(this, a);
+    const u = typeof a[0] === "string" ? a[0] : (a[0] && a[0].url) || "";
+    if (u.includes("wbloks/fetch") && u.includes("type=action")) {
+      p.then(r => { if (!r.ok) httpError = r.status; }).catch(() => { httpError = "network"; });
+    }
+    return p;
+  };
   const realClick = (el) => {
     el.scrollIntoView({ block: "center" });
     ["mousedown", "mouseup", "click"].forEach(t =>
@@ -59,7 +73,14 @@
     let icons = getIcons();
     if (icons.length === 0) {
       const sb = findSelect();
-      if (!sb) { console.log("Nothing left / Select gone. Done."); break; }
+      if (!sb) {
+        // Select gone: either truly empty, or the page broke after a throttled
+        // action. Instagram's 500 is slow (~15-20s); if we were mid-run wait.
+        if (total > 0) { for (let i = 0; i < 18 && !httpError; i++) await sleep(1000); }
+        if (httpError) console.warn(`Instagram returned HTTP ${httpError} - rate limited, the page broke mid-run. Reload and wait 30-60+ min before running again.`);
+        else console.log("Select gone. Either everything is removed, or Instagram rate-limited you (the page can break silently). If items remain, reload and wait before running again.");
+        break;
+      }
       realClick(sb);
       await sleep(1500);
       icons = getIcons();
@@ -106,6 +127,13 @@
     await sleep(100);
     confirmBtn.click();
 
+    // let Instagram process, then check for a throttle/500 on the action
+    await sleep(1500);
+    if (httpError) {
+      console.warn(`Instagram returned HTTP ${httpError} on the delete action - this is almost always rate limiting after a burst, not a bug. Stopping. Reload the page and wait a while (30-60+ min) before running again.`);
+      break;
+    }
+
     total += sel;
     cycle++;
     console.log(`Cycle ${cycle}: deleted ${sel} | total ${total}/${MAX_TOTAL}`);
@@ -114,5 +142,6 @@
     await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE));
   }
 
+  window.fetch = __origFetch;
   console.log(`%cStopped. Deleted ${total} story replies in ${cycle} cycles.`, "color:lime;font-weight:bold");
 })();
