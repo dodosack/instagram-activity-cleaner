@@ -4,6 +4,36 @@ Read this before trusting the reposts scripts. Reposts behave differently from
 likes / comments / story replies in two ways, one on Instagram's side and one
 that was our own doing.
 
+## Recommended: un-repost via the profile viewer (`4-unrepost-via-viewer.js`)
+
+The bulk-list scripts (`1`-`3`) are unreliable (see section 1). The viewer flow
+is the one that actually works, so prefer it.
+
+Instead of the "Your activity > Reposts" bulk list, open your profile Reposts
+tab and go through the posts in the normal viewer:
+
+1. Open `instagram.com/<your_username>/reposts`.
+2. Click the first repost to open it in the viewer (with the Next arrow).
+3. Run `4-unrepost-via-viewer.js`.
+
+How un-repost works there: clicking the repost icon opens a small popover that
+says **"You reposted this. Delete"** (plus an "Add" emoji button). Clicking
+**Delete** un-reposts. The script clicks the repost icon, clicks that Delete
+link, then clicks Next, and repeats.
+
+Two things make it safe:
+
+- The **"You reposted this"** text only shows when the post is actually
+  reposted. The script only clicks Delete when that popover is present, so it
+  can never accidentally re-repost. It never touches "Add".
+- If the popover/Delete is missing, it stops instead of guessing.
+
+Note: the repost icon uses `aria-label="Repost"` in both states and the only
+visual difference is the SVG path shape, so you cannot tell reposted from
+not-reposted by aria-label alone. The popover text is the reliable signal.
+
+Still start with a small `MAX` and go slow — reposts rate-limit easily.
+
 ## 1. Partial deletion (not always reproducible)
 
 On one account we saw this: select ~30 reposts, confirm, and only a few

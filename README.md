@@ -72,6 +72,10 @@ above) before running a group, and run the files in number order.
 | `1-diagnose-reposts.js` | Turns on selection mode, checks selectors | no |
 | `2-mini-test-3-reposts.js` | Removes up to 3 reposts so you see the flow | yes, 3 |
 | `3-bulk-remove-reposts.js` | Loops and removes reposts in batches | yes |
+| `4-unrepost-via-viewer.js` | **Recommended.** Un-reposts through the profile viewer | yes |
+
+For reposts, use `4-unrepost-via-viewer.js` — the bulk list (`1`-`3`) deletes
+unreliably. See `scripts/reposts/NOTES.md`.
 
 **Story replies** — `scripts/story_replies/` — page `.../interactions/story_replies`
 
