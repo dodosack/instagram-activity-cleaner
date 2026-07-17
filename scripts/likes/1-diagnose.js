@@ -24,5 +24,5 @@
       "'Select' and 'Unlike').");
   }
   // 0 icons here is normal: the circle icons only appear after you turn on
-  // selection mode. Run 02-check-select-mode.js next.
+  // selection mode. Run 2-check-select-mode.js next.
 })();

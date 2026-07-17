@@ -35,5 +35,5 @@
 
   console.log("Selectable comment icons after Select:", icons.length);
   console.log("'Delete' control present:", deleteSpan ? "yes" : "no (usually appears once a comment is selected)");
-  console.log("If this looks right, run 06-mini-test-3-comments.js.");
+  console.log("If this looks right, run 2-mini-test-3-comments.js.");
 })();

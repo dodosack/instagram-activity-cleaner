@@ -26,5 +26,5 @@
 
   const icons = document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
   console.log("Selectable like icons now visible:", icons.length);
-  console.log("Scroll down to load more likes. When this works, run 03-mini-test-3-likes.js.");
+  console.log("Scroll down to load more likes. When this works, run 3-mini-test-3-likes.js.");
 })();
