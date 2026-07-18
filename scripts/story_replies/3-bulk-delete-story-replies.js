@@ -25,12 +25,15 @@
   const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
   const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
   const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
-  const MAX_ERRORS  = 1;      // 1 = stop on the first 429/500; raise to ride out short throttles with backoff
-  const BACKOFF_MIN = 60000;  // wait at least this long after a throttle (ms)
-  const BACKOFF_MAX = 120000; // wait at most this long after a throttle (ms)
-  // WARNING: raising MAX_ERRORS keeps sending actions after Instagram already
-  // told you to slow down (429/500). That is aggressive and can get your
-  // account temporarily blocked. Leave it at 1 unless you accept that risk.
+  const MAX_RETRIES = 1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429
+  const BACKOFF_MIN = 60000;  // wait at least this long after a 429 (ms)
+  const BACKOFF_MAX = 120000; // wait at most this long after a 429 (ms)
+  // A 500 on the real delete action always stops immediately - at that point
+  // the page is usually broken and only a long wait helps. A 429 (Too Many
+  // Requests) gets one backoff-and-retry by default; if it comes back, we stop.
+  // WARNING: raising MAX_RETRIES keeps sending actions after Instagram already
+  // told you to slow down. That is aggressive and can get your account
+  // temporarily blocked. Leave it at 1 unless you accept that risk.
   // ====================
 
   window.__STOP__ = false;
@@ -40,13 +43,21 @@
   // Watch Instagram's own action requests. A 500 here is almost always rate
   // limiting after a burst, not a bug - we detect it and stop cleanly instead
   // of misreporting "Nothing left" when the page has actually broken.
-  let httpError = null;
+  let actionError = null;   // HTTP error on the real delete action
+  let loadMore429 = false;  // 429 on pagination ('load more') this cycle
   const __origFetch = window.fetch;
   window.fetch = function (...a) {
     const p = __origFetch.apply(this, a);
     const u = typeof a[0] === "string" ? a[0] : (a[0] && a[0].url) || "";
     if (u.includes("wbloks/fetch") && u.includes("type=action")) {
-      p.then(r => { if (!r.ok) httpError = r.status; }).catch(() => { httpError = "network"; });
+      p.then(r => {
+        if (!r.ok) {
+          if (u.includes("_next")) {
+            if (r.status === 429) { loadMore429 = true; console.warn("HTTP 429 registered on 'load more' - Instagram is throttling (the deletes themselves still go through)."); }
+            else console.warn(`Note: 'load more' failed (HTTP ${r.status}) - continuing.`);
+          } else actionError = r.status; // error on the real delete action
+        }
+      }).catch(() => { actionError = "network"; });
     }
     return p;
   };
@@ -70,7 +81,10 @@
   console.log("%cStart. Stop with:  window.__STOP__ = true", "color:cyan;font-weight:bold");
 
   while (!window.__STOP__ && total < MAX_TOTAL) {
-    httpError = null;
+    // NOTE: actionError/loadMore429 are NOT reset here. Throttled responses
+    // arrive seconds late (often during the between-cycle pause), so the flags
+    // are only cleared where they are handled - resetting them here wiped them
+    // before the check ever saw them.
     if (blocked()) {
       console.warn("Instagram shows 'action blocked'. Stopped. Wait 24-48h before trying again.");
       break;
@@ -83,8 +97,8 @@
       if (!sb) {
         // Select gone: either truly empty, or the page broke after a throttled
         // action. Instagram's 500 is slow (~15-20s); if we were mid-run wait.
-        if (total > 0) { for (let i = 0; i < 18 && !httpError; i++) await sleep(1000); }
-        if (httpError) console.warn(`Instagram returned HTTP ${httpError} - rate limited, the page broke mid-run. Reload and wait 30-60+ min before running again.`);
+        if (total > 0) { for (let i = 0; i < 18 && !actionError; i++) await sleep(1000); }
+        if (actionError) console.warn(`Instagram returned HTTP ${actionError} - rate limited, the page broke mid-run. Reload and wait 30-60+ min before running again.`);
         else console.log("Select gone. Either everything is removed, or Instagram rate-limited you (the page can break silently). If items remain, reload and wait before running again.");
         break;
       }
@@ -134,24 +148,46 @@
     await sleep(100);
     confirmBtn.click();
 
-    // let Instagram process, then check for a throttle (429) or 500 on the action
+    // let Instagram process, then check for throttling on the requests
     await sleep(1500);
-    if (httpError) {
+    if (actionError && actionError !== 429) {
+      // 500 (or network error) on the real action: the page is broken, no retry helps
+      console.warn(`Instagram returned HTTP ${actionError} on the delete action - hard stop. Reload and wait 30-60+ min (sometimes hours) before trying again.`);
+      break;
+    }
+    if (actionError === 429) {
       errorStreak++;
-      if (errorStreak >= MAX_ERRORS) {
-        console.warn(`Instagram returned HTTP ${httpError} ${errorStreak}x in a row - you are rate limited. Stopping. Reload and wait longer (hours) before trying again.`);
+      if (errorStreak > MAX_RETRIES) {
+        console.warn(`HTTP 429 on the delete action again (${errorStreak}x) - you are rate limited. Stopping. Reload and wait 30-60+ min before trying again.`);
         break;
       }
       const back = rnd(BACKOFF_MIN, BACKOFF_MAX);
-      console.warn(`Instagram returned HTTP ${httpError} (rate limit). Backing off ~${Math.round(back / 1000)}s, then retrying (${errorStreak}/${MAX_ERRORS}). Remaining items get retried.`);
+      console.warn(`HTTP 429 registered on the delete action (retry ${errorStreak}/${MAX_RETRIES}) - backing off ~${Math.round(back / 1000)}s, then retrying remaining items. Warning: continuing after a 429 can result in a block.`);
+      actionError = null;
+      loadMore429 = false; // one backoff covers this throttle episode
       await sleep(back);
       continue;
     }
-    errorStreak = 0;
 
     total += sel;
     cycle++;
     console.log(`Cycle ${cycle}: deleted ${sel} | total ${total}/${MAX_TOTAL}`);
+
+    if (loadMore429) {
+      // pagination got throttled; the deletes went through, but Instagram is
+      // telling us to slow down - back off once, stop if it keeps happening
+      loadMore429 = false;
+      errorStreak++;
+      if (errorStreak > MAX_RETRIES) {
+        console.warn(`HTTP 429 on 'load more' again (${errorStreak}x) - Instagram keeps throttling. Stopping. Wait 30-60+ min before running again.`);
+        break;
+      }
+      const back = rnd(BACKOFF_MIN, BACKOFF_MAX);
+      console.warn(`HTTP 429 registered on 'load more' (retry ${errorStreak}/${MAX_RETRIES}) - backing off ~${Math.round(back / 1000)}s before continuing.`);
+      await sleep(back);
+      continue;
+    }
+    errorStreak = 0;
 
     // vary the pause; now and then take a longer break like a human would
     await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE));

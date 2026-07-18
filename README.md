@@ -151,18 +151,24 @@ number and it depends on the account.
   The bulk script stops on its own if it detects that message.
 
 **HTTP 500 / 429 = rate limiting.** After a burst (often ~100-150 actions in a
-short run, regardless of batch size) Instagram starts returning `500` or `429
-Too Many Requests` on the unlike/delete request and the page can get stuck.
-This is throttling, not a bug in the script. By default (`MAX_ERRORS = 1`) the
-bulk scripts **stop on the first one** with a clear message instead of
-pretending the list is empty. When it happens: reload the page and wait a while
-(30-60+ minutes, sometimes longer) before running again. Smaller sessions and
-longer pauses make it happen less.
+short run, regardless of batch size) Instagram starts throttling. This is not a
+bug in the script. The bulk scripts watch Instagram's requests and handle the
+two cases differently:
 
-You can raise `MAX_ERRORS` to make the script back off and keep retrying through
-short throttles. **Be careful:** that means sending actions after Instagram
-already told you to slow down, which is aggressive and can get your account
-temporarily blocked. Leave it at 1 unless you accept that risk.
+- **`500` on the unlike/delete request** — the page is usually broken at that
+  point and only waiting helps. The script **stops immediately** with a clear
+  message instead of pretending the list is empty. Reload and wait 30-60+
+  minutes (sometimes longer) before running again.
+- **`429 Too Many Requests`** (on the action or on the "load more" pagination) —
+  the script registers it, prints a warning, **backs off 1-2 minutes and
+  retries once** (`MAX_RETRIES = 1`). If the 429 comes right back, it stops.
+  Set `MAX_RETRIES = 0` to stop on the very first 429 instead.
+
+You can raise `MAX_RETRIES` to keep retrying through longer throttles.
+**Be careful:** that means sending actions after Instagram already told you to
+slow down, which is aggressive and can get your account temporarily blocked.
+Leave it at 1 unless you accept that risk. Smaller sessions and longer pauses
+make throttling happen less in the first place.
 
 ## Credits
 
