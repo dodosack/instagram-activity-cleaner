@@ -98,14 +98,12 @@ interchangeable.
 
 ### Reposts: known Instagram issue
 
-Reposts delete unreliably on Instagram's side right now. With the default
-"Newest to oldest" order, Instagram often shows a "deleted" toast but leaves
-the repost in place — this happens **when you delete by hand too**, so it is
-not caused by these scripts. Sorting **Oldest to newest** (Sort & filter)
-before you start makes it much more reliable, but Instagram may still fail or
-rate-limit after a while. If nothing is actually disappearing, stop and try
-again later. The bulk script verifies the selection registered before deleting
-so it won't report fake successes.
+The reposts bulk list (scripts `1`–`3`) deletes unreliably on Instagram's
+side: it often shows a "deleted" toast but leaves the repost in place. This
+happens **when you delete by hand too**, so it is not caused by these scripts
+— and no sort order or setting fixes it. Use the workaround instead:
+`4-unrepost-via-viewer.js` removes reposts one by one through the profile
+viewer and works reliably. Details in `scripts/reposts/NOTES.md`.
 
 ## Bulk script
 
@@ -122,10 +120,18 @@ const MAX_TOTAL   = 200;    // stop after this many this session
 const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
 const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
 const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
+const SELECT_RETRIES = 3;   // re-checks before concluding the list is empty
+const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits between re-checks (ms)
+const MAX_RETRIES = 1;      // backoff-and-retries on a 429 before stopping (see Limits)
 ```
 
 Skipped items are not lost — they stay unselected and get picked up in a later
 cycle.
+
+**Slow reloads are not mistaken for "done."** After a bigger delete the page
+can take a while to re-render. If the list looks empty, the script re-checks
+`SELECT_RETRIES` times with the escalating `SELECT_PAUSES` waits (5s/8s/12s;
+extra retries reuse the last value) before it concludes there is nothing left.
 
 **Batch size is capped at ~100.** The page only keeps ~25 rows in the DOM, so
 the scripts scroll to load more until the batch is full. But Instagram's own

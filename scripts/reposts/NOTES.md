@@ -56,9 +56,11 @@ What helps:
 
 - Use a **small BATCH** (5–6) so the whole selection stays on screen.
 - Go slower / spread deletes over time instead of hammering in one session.
-- Sorting **Oldest to newest** (Sort & filter) can keep rows more stable.
 - The bulk script counts the actually-selected icons (`circle-check`) before
   deleting, so it won't report fake successes.
+
+(Sorting **Oldest to newest** was suggested earlier as a stabilizer — testing
+showed it does not help. The viewer flow above is the reliable path.)
 
 If only part of a batch deletes, it is usually rate limiting — stop and try
 again later.
@@ -90,6 +92,6 @@ Reality: reposts use the same Bloks flow as comments —
 a real `<button>` whose text is "Delete".
 
 TODO: simplify `3-bulk-remove-reposts.js` and `2-mini-test-3-reposts.js` to the
-comments-style approach and drop the pointer-event / leaf-click code. Keep the
-"Oldest to newest" note above, since the partial-deletion bug is a separate,
-real Instagram issue.
+comments-style approach and drop the pointer-event / leaf-click code. Keep
+section 1 above, since the partial-deletion bug is a separate, real Instagram
+issue.
