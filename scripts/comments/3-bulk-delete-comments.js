@@ -26,6 +26,8 @@
   const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
   const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
   const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
+  const SELECT_RETRIES = 3;   // if the list looks empty, re-check this many times (page reloads slowly after big deletes)
+  const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits (ms) between those re-checks; extra retries reuse the last value
   const MAX_RETRIES = 1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429
   const BACKOFF_MIN = 60000;  // wait at least this long after a 429 (ms)
   const BACKOFF_MAX = 120000; // wait at most this long after a 429 (ms)
@@ -91,23 +93,30 @@
       break;
     }
 
-    // Make sure selection mode is on.
+    // Make sure selection mode is on. After a bigger delete the page can take
+    // a while to re-render - retry with pauses before concluding it is empty.
     let icons = getIcons();
-    if (icons.length === 0) {
+    for (let att = 1; icons.length === 0 && att <= SELECT_RETRIES && !window.__STOP__; att++) {
       const sb = findSelect();
-      if (!sb) {
-        // Select gone: either truly empty, or the page broke after a throttled
-        // action. Instagram's 500 is slow (~15-20s); if we were mid-run wait.
+      const wait = SELECT_PAUSES[Math.min(att, SELECT_PAUSES.length) - 1];
+      if (sb) realClick(sb);
+      else console.log(`List not ready yet (attempt ${att}/${SELECT_RETRIES}) - waiting ${Math.round(wait / 1000)}s for the page to load...`);
+      await sleep(sb ? 1500 : wait);
+      icons = getIcons();
+    }
+    if (icons.length === 0) {
+      if (!findSelect()) {
+        // Select still gone after the retries: either truly empty, or the page
+        // broke after a throttled action. Instagram's 500 is slow (~15-20s);
+        // if we were mid-run wait for it before deciding.
         if (total > 0) { for (let i = 0; i < 18 && !actionError; i++) await sleep(1000); }
         if (actionError) console.warn(`Instagram returned HTTP ${actionError} - rate limited, the page broke mid-run. Reload and wait 30-60+ min before running again.`);
         else console.log("Select gone. Either all comments are removed, or Instagram rate-limited you (the page can break silently). If comments remain, reload and wait before running again.");
-        break;
+      } else {
+        console.log("No comments left.");
       }
-      realClick(sb);
-      await sleep(1500);
-      icons = getIcons();
+      break;
     }
-    if (icons.length === 0) { console.log("No comments left."); break; }
 
     // Select a randomized batch. Instagram keeps only ~25 rows in the DOM at a
     // time, so scroll to load more until we reach the target (or run out).
