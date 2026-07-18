@@ -28,6 +28,9 @@
   const MAX_ERRORS  = 1;      // 1 = stop on the first 429/500; raise to ride out short throttles with backoff
   const BACKOFF_MIN = 60000;  // wait at least this long after a throttle (ms)
   const BACKOFF_MAX = 120000; // wait at most this long after a throttle (ms)
+  // WARNING: raising MAX_ERRORS keeps sending actions after Instagram already
+  // told you to slow down (429/500). That is aggressive and can get your
+  // account temporarily blocked. Leave it at 1 unless you accept that risk.
   // ====================
 
   window.__STOP__ = false;
