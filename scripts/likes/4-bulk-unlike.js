@@ -26,6 +26,9 @@
   const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
   const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
   const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
+  const MAX_ERRORS  = 1;      // 1 = stop on the first 429/500; raise to ride out short throttles with backoff
+  const BACKOFF_MIN = 60000;  // wait at least this long after a throttle (ms)
+  const BACKOFF_MAX = 120000; // wait at most this long after a throttle (ms)
   // ====================
 
   window.__STOP__ = false;
@@ -56,10 +59,11 @@
   const blocked = () => [...document.querySelectorAll("*")]
     .some(el => /action blocked|try again later|we restrict/i.test(el.innerText || ""));
 
-  let total = 0, cycle = 0;
+  let total = 0, cycle = 0, errorStreak = 0;
   console.log("%cStart. Stop with:  window.__STOP__ = true", "color:cyan;font-weight:bold");
 
   while (!window.__STOP__ && total < MAX_TOTAL) {
+    httpError = null;
     if (blocked()) {
       console.warn("Instagram shows 'action blocked'. Stopped. Wait 24-48h before trying again.");
       break;
@@ -125,12 +129,20 @@
     await sleep(100);
     confirmBtn.click();
 
-    // let Instagram process, then check for a throttle/500 on the action
+    // let Instagram process, then check for a throttle (429) or 500 on the action
     await sleep(1500);
     if (httpError) {
-      console.warn(`Instagram returned HTTP ${httpError} on the unlike action - this is almost always rate limiting after a burst, not a bug. Stopping. Reload the page and wait a while (30-60+ min) before running again.`);
-      break;
+      errorStreak++;
+      if (errorStreak >= MAX_ERRORS) {
+        console.warn(`Instagram returned HTTP ${httpError} ${errorStreak}x in a row - you are rate limited. Stopping. Reload and wait longer (hours) before trying again.`);
+        break;
+      }
+      const back = rnd(BACKOFF_MIN, BACKOFF_MAX);
+      console.warn(`Instagram returned HTTP ${httpError} (rate limit). Backing off ~${Math.round(back / 1000)}s, then retrying (${errorStreak}/${MAX_ERRORS}). Still-liked posts get retried.`);
+      await sleep(back);
+      continue;
     }
+    errorStreak = 0;
 
     total += sel;
     cycle++;
