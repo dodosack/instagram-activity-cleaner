@@ -30,9 +30,13 @@
   const MAX_RETRIES = 1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429
   const BACKOFF_MIN = 60000;  // wait at least this long after a 429 (ms)
   const BACKOFF_MAX = 120000; // wait at most this long after a 429 (ms)
-  // A 500 on the real delete action always stops immediately - at that point
-  // the page is usually broken and only a long wait helps. A 429 (Too Many
-  // Requests) gets one backoff-and-retry by default; if it comes back, we stop.
+  const RECOVER_500  = 1;      // after a 500 breaks the page, try to restore it in place this many times (0 = stop immediately)
+  const RECOVER_MIN  = 60000;  // wait at least this long before the restore attempt (ms)
+  const RECOVER_MAX  = 100000; // wait at most this long before the restore attempt (ms)
+  // A 500 on the real delete action breaks the page - the script tries the
+  // in-place tab-switch recovery (RECOVER_500 times), then stops. A 429 (Too
+  // Many Requests) gets one backoff-and-retry by default; if it comes back,
+  // we stop.
   // WARNING: raising MAX_RETRIES keeps sending actions after Instagram already
   // told you to slow down. That is aggressive and can get your account
   // temporarily blocked. Leave it at 1 unless you accept that risk.
@@ -79,6 +83,34 @@
   const blocked = () => [...document.querySelectorAll("*")]
     .some(el => /action blocked|try again later|we restrict/i.test(el.innerText || ""));
 
+  // After a 500 the list often breaks (endless spinner). A full page reload
+  // would kill this script, but the page is an SPA: switching to another tab
+  // and back makes Instagram re-render the list in place. Try that before
+  // giving up.
+  const findTab = (label) => {
+    const re = new RegExp("^" + label + "$", "i");
+    const els = [...document.querySelectorAll("div,span")].filter(el => re.test((el.innerText || "").trim()));
+    return els.length ? els[els.length - 1] : null; // last match = deepest element
+  };
+  let recoverTries = 0;
+  const tryRecover = async (err) => {
+    actionError = null;
+    loadMore429 = false;
+    recoverTries++;
+    if (recoverTries > RECOVER_500) return false;
+    const wait = rnd(RECOVER_MIN, RECOVER_MAX);
+    console.warn(`HTTP ${err} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_500}).`);
+    await sleep(wait);
+    const away = findTab("Likes");
+    if (away) { console.log("%cRecovery: switching to the Likes tab...", "color:orange;font-weight:bold"); realClick(away); await sleep(2500); }
+    else console.warn("Recovery: Likes tab not found - cannot switch away.");
+    const home = findTab("Story replies");
+    if (home) { console.log("%cRecovery: switching back to the Story replies tab...", "color:orange;font-weight:bold"); realClick(home); await sleep(3500); }
+    else console.warn("Recovery: Story replies tab not found - the page may be too broken.");
+    console.log("%cRecovery: tab switch done - re-checking the list.", "color:orange;font-weight:bold");
+    return true;
+  };
+
   let total = 0, cycle = 0, errorStreak = 0;
   console.log("%cStart. Stop with:  window.__STOP__ = true", "color:cyan;font-weight:bold");
 
@@ -109,7 +141,11 @@
         // broke after a throttled action. Instagram's 500 is slow (~15-20s);
         // if we were mid-run wait for it before deciding.
         if (total > 0) { for (let i = 0; i < 18 && !actionError; i++) await sleep(1000); }
-        if (actionError) console.warn(`Instagram returned HTTP ${actionError} - rate limited, the page broke mid-run. Reload and wait 30-60+ min before running again.`);
+        if (actionError) {
+          const err = actionError;
+          if (err !== 429 && await tryRecover(err)) continue;
+          console.warn(`Instagram returned HTTP ${err} - rate limited, the page broke mid-run. Reload and wait 30-60+ min before running again.`);
+        }
         else console.log("Select gone. Either everything is removed, or Instagram rate-limited you (the page can break silently). If items remain, reload and wait before running again.");
       } else {
         console.log("Nothing left.");
@@ -160,8 +196,10 @@
     // let Instagram process, then check for throttling on the requests
     await sleep(1500);
     if (actionError && actionError !== 429) {
-      // 500 (or network error) on the real action: the page is broken, no retry helps
-      console.warn(`Instagram returned HTTP ${actionError} on the delete action - hard stop. Reload and wait 30-60+ min (sometimes hours) before trying again.`);
+      // 500 (or network error) on the real action: the page usually breaks here
+      const err = actionError;
+      if (await tryRecover(err)) continue;
+      console.warn(`Instagram returned HTTP ${err} on the delete action - hard stop. Reload and wait 30-60+ min (sometimes hours) before trying again.`);
       break;
     }
     if (actionError === 429) {
@@ -197,6 +235,7 @@
       continue;
     }
     errorStreak = 0;
+    recoverTries = 0;
 
     // vary the pause; now and then take a longer break like a human would
     await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE));
