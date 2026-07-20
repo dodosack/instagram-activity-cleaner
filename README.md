@@ -173,11 +173,14 @@ two cases differently:
   retries once** (`MAX_RETRIES = 1`). If the 429 comes right back, it stops.
   Set `MAX_RETRIES = 0` to stop on the very first 429 instead.
 
-You can raise `MAX_RETRIES` to keep retrying through longer throttles.
-**Be careful:** that means sending actions after Instagram already told you to
-slow down, which is aggressive and can get your account temporarily blocked.
-Leave it at 1 unless you accept that risk. Smaller sessions and longer pauses
-make throttling happen less in the first place.
+You can raise `MAX_RETRIES` and `RECOVER_500` to ride out longer throttles, or
+set either to `-1` to retry **forever** (the script then never stops for that
+error class on its own). **Be careful:** that means sending actions after
+Instagram already told you to slow down, which is aggressive and can get your
+account temporarily blocked — especially `-1`, where only `window.__STOP__ =
+true` or a real block ends the run. Leave both at 1 unless you accept that
+risk. Smaller sessions and longer pauses make throttling happen less in the
+first place.
 
 ## Credits
 

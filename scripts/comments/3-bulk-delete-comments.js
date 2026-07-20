@@ -28,22 +28,24 @@
   const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
   const SELECT_RETRIES = 3;   // if the list looks empty, re-check this many times (page reloads slowly after big deletes)
   const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits (ms) between those re-checks; extra retries reuse the last value
-  const MAX_RETRIES = 1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429
+  const MAX_RETRIES = 1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429, -1 = retry forever
   const BACKOFF_MIN = 60000;  // wait at least this long after a 429 (ms)
   const BACKOFF_MAX = 120000; // wait at most this long after a 429 (ms)
-  const RECOVER_500  = 1;      // after a 500 breaks the page, try to restore it in place this many times (0 = stop immediately)
+  const RECOVER_500  = 1;      // after a 500 breaks the page, try to restore it in place this many times (0 = stop immediately, -1 = keep trying forever)
   const RECOVER_MIN  = 60000;  // wait at least this long before the restore attempt (ms)
   const RECOVER_MAX  = 100000; // wait at most this long before the restore attempt (ms)
   // A 500 on the real delete action breaks the page - the script tries the
   // in-place tab-switch recovery (RECOVER_500 times), then stops. A 429 (Too
   // Many Requests) gets one backoff-and-retry by default; if it comes back,
-  // we stop.
-  // WARNING: raising MAX_RETRIES keeps sending actions after Instagram already
-  // told you to slow down. That is aggressive and can get your account
-  // temporarily blocked. Leave it at 1 unless you accept that risk.
+  // we stop. -1 on either limit means retry forever and never stop for it.
+  // WARNING: raising these keeps sending actions after Instagram already told
+  // you to slow down. That is aggressive and can get your account temporarily
+  // blocked - especially -1, which never backs out on its own.
   // ====================
 
   window.__STOP__ = false;
+  const RETRY_LIMIT = MAX_RETRIES < 0 ? "unlimited" : MAX_RETRIES;
+  const RECOVER_LIMIT = RECOVER_500 < 0 ? "unlimited" : RECOVER_500;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const rnd = (a, b) => a + Math.floor(Math.random() * (b - a));
 
@@ -98,9 +100,9 @@
     actionError = null;
     loadMore429 = false;
     recoverTries++;
-    if (recoverTries > RECOVER_500) return false;
+    if (RECOVER_500 >= 0 && recoverTries > RECOVER_500) return false;
     const wait = rnd(RECOVER_MIN, RECOVER_MAX);
-    console.warn(`HTTP ${err} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_500}).`);
+    console.warn(`HTTP ${err} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
     await sleep(wait);
     const away = findTab("Likes");
     if (away) { console.log("%cRecovery: switching to the Likes tab...", "color:orange;font-weight:bold"); realClick(away); await sleep(2500); }
@@ -205,12 +207,12 @@
     }
     if (actionError === 429) {
       errorStreak++;
-      if (errorStreak > MAX_RETRIES) {
+      if (MAX_RETRIES >= 0 && errorStreak > MAX_RETRIES) {
         console.warn(`HTTP 429 on the delete action again (${errorStreak}x) - you are rate limited. Stopping. Reload and wait 30-60+ min before trying again.`);
         break;
       }
       const back = rnd(BACKOFF_MIN, BACKOFF_MAX);
-      console.warn(`HTTP 429 registered on the delete action (retry ${errorStreak}/${MAX_RETRIES}) - backing off ~${Math.round(back / 1000)}s, then retrying remaining comments. Warning: continuing after a 429 can result in a block.`);
+      console.warn(`HTTP 429 registered on the delete action (retry ${errorStreak}/${RETRY_LIMIT}) - backing off ~${Math.round(back / 1000)}s, then retrying remaining comments. Warning: continuing after a 429 can result in a block.`);
       actionError = null;
       loadMore429 = false; // one backoff covers this throttle episode
       await sleep(back);
@@ -226,12 +228,12 @@
       // telling us to slow down - back off once, stop if it keeps happening
       loadMore429 = false;
       errorStreak++;
-      if (errorStreak > MAX_RETRIES) {
+      if (MAX_RETRIES >= 0 && errorStreak > MAX_RETRIES) {
         console.warn(`HTTP 429 on 'load more' again (${errorStreak}x) - Instagram keeps throttling. Stopping. Wait 30-60+ min before running again.`);
         break;
       }
       const back = rnd(BACKOFF_MIN, BACKOFF_MAX);
-      console.warn(`HTTP 429 registered on 'load more' (retry ${errorStreak}/${MAX_RETRIES}) - backing off ~${Math.round(back / 1000)}s before continuing.`);
+      console.warn(`HTTP 429 registered on 'load more' (retry ${errorStreak}/${RETRY_LIMIT}) - backing off ~${Math.round(back / 1000)}s before continuing.`);
       await sleep(back);
       continue;
     }
