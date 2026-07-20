@@ -175,7 +175,7 @@
       // right after a dismissed dialog we already waited DIALOG_AFTER - use
       // short re-checks so the waits do not stack up to half a minute
       const wait = justDismissed ? DIALOG_RETRY : SELECT_PAUSES[Math.min(att, SELECT_PAUSES.length) - 1];
-      if (sb) realClick(sb);
+      if (sb) { console.log(`Retry ${att}/${SELECT_RETRIES}: list is back - turning selection mode on again...`); realClick(sb); }
       else console.log(`List not ready yet (attempt ${att}/${SELECT_RETRIES}) - waiting ${Math.round(wait / 1000)}s for the page to load...`);
       const slept = sb ? 1500 : wait;
       await sleep(slept);
