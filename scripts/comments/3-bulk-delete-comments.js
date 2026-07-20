@@ -86,6 +86,38 @@
   const blocked = () => [...document.querySelectorAll("*")]
     .some(el => /action blocked|try again later|we restrict/i.test(el.innerText || ""));
 
+  // "Something went wrong - There was a problem deleting some or all of your
+  // content." Instagram shows this modal after a throttled action, but the
+  // comments usually ARE removed. It also swallows every click behind it (the
+  // recovery tab switch included), so dismiss it with its own OK button.
+  // Its OK is a plain <button> with no bloks/aria/role attributes (recorded
+  // 2026-07-20), so the same focus+click used for the confirm dialog works.
+  // Clicking it the millisecond it appears does NOT bring the list back (the
+  // page stays blank); by hand, where a few seconds pass first, it does. So
+  // let the modal settle, then click ONCE - a second click lands on the
+  // closing dialog and seems to kill the re-render.
+  const findOk = () => [...document.querySelectorAll("button")]
+    .find(b => (b.innerText || "").trim() === "OK");
+  const DIALOG_SETTLE = 4000; // wait before pressing OK
+  const DIALOG_AFTER  = 6000; // wait after pressing OK, before retrying the list
+  const DIALOG_RETRY  = 2000; // re-check pause after a dialog (instead of the long SELECT_PAUSES)
+  let justDismissed = false;  // set by dismissError, consumed by the select loop
+  const dismissError = async () => {
+    if (!findOk()) return false;
+    console.warn(`'Something went wrong' dialog is up - waiting ${DIALOG_SETTLE / 1000}s, then pressing OK.`);
+    await sleep(DIALOG_SETTLE);
+    const ok = findOk();
+    if (!ok) return false; // gone on its own
+    ok.focus();
+    ok.click();
+    await sleep(600);
+    if (document.contains(ok)) realClick(ok); // native click did not take
+    console.warn(`Pressed OK - waiting ${DIALOG_AFTER / 1000}s for the page to come back, then retrying.`);
+    await sleep(DIALOG_AFTER);
+    justDismissed = true; // keep the following re-checks short, not 5/8/12s
+    return true;
+  };
+
   // After a 500 the list often breaks (endless spinner). A full page reload
   // would kill this script, but the page is an SPA: switching to another tab
   // and back makes Instagram re-render the list in place. Try that before
@@ -104,6 +136,7 @@
     const wait = rnd(RECOVER_MIN, RECOVER_MAX);
     console.warn(`HTTP ${err} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
     await sleep(wait);
+    await dismissError(); // the modal would eat the tab clicks
     const away = findTab("Likes");
     if (away) { console.log("%cRecovery: switching to the Likes tab...", "color:orange;font-weight:bold"); realClick(away); await sleep(2500); }
     else console.warn("Recovery: Likes tab not found - cannot switch away.");
@@ -117,33 +150,47 @@
   let total = 0, cycle = 0, errorStreak = 0;
   console.log("%cStart. Stop with:  window.__STOP__ = true", "color:cyan;font-weight:bold");
 
+  cycles:
   while (!window.__STOP__ && total < MAX_TOTAL) {
     // NOTE: actionError/loadMore429 are NOT reset here. Throttled responses
     // arrive seconds late (often during the between-cycle pause), so the flags
     // are only cleared where they are handled - resetting them here wiped them
     // before the check ever saw them.
+    await dismissError(); // leftover modal from the last cycle
     if (blocked()) {
       console.warn("Instagram shows 'action blocked'. Stopped. Wait 24-48h before trying again.");
       break;
     }
 
-    // Make sure selection mode is on. After a bigger delete the page can take
-    // a while to re-render - retry with pauses before concluding it is empty.
+    // Make sure selection mode is on. If the rows are gone, check for the
+    // error dialog FIRST - when it is up it is blocking the page, so waiting
+    // out the retries would just burn time. Press OK, then retry the list.
     let icons = getIcons();
+    if (icons.length === 0 && await dismissError()) icons = getIcons();
     for (let att = 1; icons.length === 0 && att <= SELECT_RETRIES && !window.__STOP__; att++) {
       const sb = findSelect();
-      const wait = SELECT_PAUSES[Math.min(att, SELECT_PAUSES.length) - 1];
+      // right after a dismissed dialog we already waited DIALOG_AFTER - use
+      // short re-checks so the waits do not stack up to half a minute
+      const wait = justDismissed ? DIALOG_RETRY : SELECT_PAUSES[Math.min(att, SELECT_PAUSES.length) - 1];
       if (sb) realClick(sb);
       else console.log(`List not ready yet (attempt ${att}/${SELECT_RETRIES}) - waiting ${Math.round(wait / 1000)}s for the page to load...`);
       await sleep(sb ? 1500 : wait);
       icons = getIcons();
     }
+    justDismissed = false;
     if (icons.length === 0) {
       if (!findSelect()) {
         // Select still gone after the retries: either truly empty, or the page
-        // broke after a throttled action. Instagram's 500 is slow (~15-20s);
-        // if we were mid-run wait for it before deciding.
-        if (total > 0) { for (let i = 0; i < 18 && !actionError; i++) await sleep(1000); }
+        // broke after a throttled action. Instagram's 500 is slow (~15-20s), so
+        // if we were mid-run give it a moment to arrive before deciding - and
+        // watch for the error dialog, which often shows up without any failed
+        // request at all. If it does, press OK and start the cycle over.
+        if (total > 0) {
+          for (let i = 0; i < 18 && !actionError; i++) {
+            if (await dismissError()) continue cycles; // retries and all
+            await sleep(1000);
+          }
+        }
         if (actionError) {
           const err = actionError;
           if (err !== 429 && await tryRecover(err)) continue;
@@ -198,6 +245,7 @@
 
     // let Instagram process, then check for throttling on the requests
     await sleep(1500);
+    await dismissError();
     if (actionError && actionError !== 429) {
       // 500 (or network error) on the real action: the page usually breaks here
       const err = actionError;
