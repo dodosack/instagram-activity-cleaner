@@ -175,13 +175,20 @@
     return els.length ? els[els.length - 1] : null; // last match = deepest element
   };
   let recoverTries = 0;
+  // The tab switch is also the last resort when the list is simply gone with no
+  // failed request behind it (see the 429 case below). Capped separately, so a
+  // genuinely empty list ends the run instead of switching tabs forever - that
+  // must hold even when RECOVER_500 is -1.
+  const EMPTY_RECOVERIES = 2;
+  let emptyRecoveries = 0;
   const tryRecover = async (err) => {
     actionError = null;
     loadMore429 = false;
     recoverTries++;
     if (RECOVER_500 >= 0 && recoverTries > RECOVER_500) return false;
     const wait = rnd(RECOVER_MIN, RECOVER_MAX);
-    console.warn(`HTTP ${err} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
+    const what = typeof err === "number" ? `HTTP ${err}` : err; // callers pass a status or a reason
+    console.warn(`${what} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
     await sleep(wait);
     await dismissError(); // the modal would eat the tab clicks
     const away = findTab("Likes");
@@ -269,7 +276,18 @@
           if (err !== 429 && await tryRecover(err)) continue;
           console.warn(`Instagram returned HTTP ${err} - rate limited, the page broke mid-run. Reload and wait 30-60+ min before running again.`);
         }
-        else console.log("Select gone. Either all comments are removed, or Instagram rate-limited you (the page can break silently). If comments remain, reload and wait before running again.");
+        else {
+          // No request failed, but the list is gone. That is what a 429 leaves
+          // behind: the flag was consumed by the backoff, so nothing counts as
+          // an error any more, and the page dropped the list anyway. Give it
+          // the same tab switch the 500 path gets before concluding anything.
+          if (total > 0 && emptyRecoveries < EMPTY_RECOVERIES) {
+            emptyRecoveries++;
+            console.warn(`The list is gone but no request failed - trying the tab switch (${emptyRecoveries}/${EMPTY_RECOVERIES}) before giving up.`);
+            if (await tryRecover("The list disappeared without a failed request")) continue;
+          }
+          console.log("Select gone. Either all comments are removed, or Instagram rate-limited you (the page can break silently). If comments remain, reload and wait before running again.");
+        }
       } else {
         // Selection mode is available but no rows are loaded. After a
         // re-render that usually means the list is still filling in, and
@@ -367,6 +385,7 @@
     }
     errorStreak = 0;
     recoverTries = 0;
+    emptyRecoveries = 0;
 
     // vary the pause; now and then take a longer break like a human would
     const base = Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE);
