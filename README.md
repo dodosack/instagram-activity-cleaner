@@ -122,12 +122,21 @@ const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
 const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
 const SELECT_RETRIES = 3;   // re-checks before concluding the list is empty
 const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits between re-checks (ms)
+const SORT_ORDER  = "auto"; // "auto" keeps what you set, "newest" / "oldest" force one
 const MAX_RETRIES = 1;      // backoff-and-retries on a 429 before stopping (see Limits)
 const RECOVER_500 = 1;      // in-place restore attempts after a 500 breaks the page (see Limits)
 ```
 
 Skipped items are not lost — they stay unselected and get picked up in a later
 cycle.
+
+**The sort order stays where you put it.** Instagram resets the list to its
+default *Newest to oldest* on every re-render — a reload, a tab switch, or the
+script's own recovery. With `SORT_ORDER = "auto"` the script reads whichever
+order is set when you start and puts that back whenever the page drops it. Set
+`"newest"` or `"oldest"` to force one instead; the script applies it before the
+first delete. If it cannot set the order twice in a row, it stops trying and
+carries on with whatever the page shows.
 
 **Slow reloads are not mistaken for "done."** After a bigger delete the page
 can take a while to re-render. If the list looks empty, the script re-checks

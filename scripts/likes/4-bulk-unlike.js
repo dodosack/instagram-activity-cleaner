@@ -28,6 +28,9 @@
   const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
   const SELECT_RETRIES = 3;   // if the list looks empty, re-check this many times (page reloads slowly after big deletes)
   const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits (ms) between those re-checks; extra retries reuse the last value
+  const SORT_ORDER = "auto";  // "auto" = keep whatever the page is set to when you start;
+                              // "newest" / "oldest" = force that order and put it back
+                              // whenever the page resets it (every re-render does)
   const MAX_RETRIES = 1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429, -1 = retry forever
   const BACKOFF_MIN = 60000;  // wait at least this long after a 429 (ms)
   const BACKOFF_MAX = 120000; // wait at most this long after a 429 (ms)
@@ -80,6 +83,44 @@
   const getIcons = () => document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
   const blocked = () => [...document.querySelectorAll("*")]
     .some(el => /action blocked|try again later|we restrict/i.test(el.innerText || ""));
+
+  // Sort order. Every re-render (reload, tab switch, the recovery below) drops
+  // the list back to the default "Newest to oldest", so we read what is set,
+  // remember it, and put it back when it flips. Flow recorded 2026-07-20:
+  // Sort & filter -> the order option -> Apply, all div[role=button] with an
+  // exact aria-label; the current order is shown as plain text next to the
+  // Sort & filter button.
+  const SORT_LABEL = { newest: "Newest to oldest", oldest: "Oldest to newest" };
+  const byAria = (label) => [...document.querySelectorAll('[role="button"]')]
+    .find(el => (el.getAttribute("aria-label") || "").trim() === label);
+  // only VISIBLE text counts - the closed sort sheet can stay in the DOM with
+  // both options in it, which would make every read look like "newest"
+  const visible = (el) => el.offsetParent !== null;
+  const readSort = () => {
+    const texts = [...document.querySelectorAll("div,span")]
+      .filter(visible).map(el => (el.innerText || "").trim());
+    const hits = Object.keys(SORT_LABEL).filter(key => texts.includes(SORT_LABEL[key]));
+    return hits.length === 1 ? hits[0] : null; // both visible = sheet is open, cannot tell
+  };
+  const applySort = async (order) => {
+    if (readSort() === order) return true;
+    const sf = byAria("Sort & filter");
+    if (!sf) { console.warn("Sort & filter button not found - leaving the sort order alone."); return false; }
+    realClick(sf);
+    await sleep(1500);
+    const opt = byAria(SORT_LABEL[order]);
+    if (!opt) { console.warn(`Sort option '${SORT_LABEL[order]}' not found - leaving the sort order alone.`); return false; }
+    realClick(opt);
+    await sleep(800);
+    const apply = byAria("Apply");
+    if (!apply) { console.warn("Apply button not found - the sort sheet may still be open."); return false; }
+    realClick(apply);
+    await sleep(3000); // the list reloads
+    const now = readSort();
+    if (now === order) { console.log(`%cSort order set to '${SORT_LABEL[order]}'.`, "color:orange;font-weight:bold"); return true; }
+    console.warn(`Tried to set '${SORT_LABEL[order]}' but the page shows '${now ? SORT_LABEL[now] : "something unreadable"}'.`);
+    return false;
+  };
 
   // "Something went wrong - There was a problem unliking some or all of your
   // content." Instagram shows this modal after a throttled action. The likes
@@ -144,6 +185,20 @@
     return true;
   };
 
+  // Decide the order ONCE, before anything is deleted.
+  let wantSort = null, sortFails = 0;
+  if (SORT_ORDER === "auto") {
+    wantSort = readSort();
+    console.log(wantSort
+      ? `Sort order: keeping '${SORT_LABEL[wantSort]}' (auto - whatever was set when you started).`
+      : "Sort order: could not read the current setting - it will not be enforced.");
+  } else if (SORT_LABEL[SORT_ORDER]) {
+    wantSort = SORT_ORDER;
+    await applySort(wantSort);
+  } else {
+    console.warn(`SORT_ORDER '${SORT_ORDER}' is not valid - use "auto", "newest" or "oldest". Leaving the sort order alone.`);
+  }
+
   let total = 0, cycle = 0, errorStreak = 0;
   console.log("%cStart. Stop with:  window.__STOP__ = true", "color:cyan;font-weight:bold");
 
@@ -154,6 +209,15 @@
     // are only cleared where they are handled - resetting them here wiped them
     // before the check ever saw them.
     await dismissError(); // leftover modal from the last cycle
+    // a re-render (recovery tab switch, or Instagram doing it on its own) puts
+    // the list back to the default order - undo that before selecting anything
+    if (wantSort && readSort() !== wantSort) {
+      console.warn(`Sort order was reset - putting it back to '${SORT_LABEL[wantSort]}'.`);
+      if (!await applySort(wantSort) && ++sortFails >= 2) {
+        wantSort = null; // do not fight the page every cycle
+        console.warn("Could not set the sort order twice in a row - continuing with whatever the page shows.");
+      }
+    }
     if (blocked()) {
       console.warn("Instagram shows 'action blocked'. Stopped. Wait 24-48h before trying again.");
       break;
