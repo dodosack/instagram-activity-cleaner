@@ -108,7 +108,10 @@
   };
   const applySort = async (order) => {
     if (readSort() === order) return true;
-    const sf = byAria("Sort & filter");
+    // the page can still be rendering (right after a recovery tab switch it
+    // always is), so wait for the button instead of giving up on the spot
+    let sf = byAria("Sort & filter");
+    for (let i = 0; i < 8 && !sf; i++) { await sleep(1500); sf = byAria("Sort & filter"); }
     if (!sf) { console.warn("Sort & filter button not found - leaving the sort order alone."); return false; }
     realClick(sf);
     await sleep(1500);
@@ -213,6 +216,7 @@
     // arrive seconds late (often during the between-cycle pause), so the flags
     // are only cleared where they are handled - resetting them here wiped them
     // before the check ever saw them.
+    justDismissed = false; // only a dialog handled IN this cycle shortens its re-checks
     await dismissError(); // leftover modal from the last cycle
     // a re-render (recovery tab switch, or Instagram doing it on its own) puts
     // the list back to the default order - undo that before selecting anything
@@ -266,6 +270,13 @@
         }
         else console.log("Select gone. Either everything is removed, or Instagram rate-limited you (the page can break silently). If items remain, reload and wait before running again.");
       } else {
+        // Selection mode is available but no rows are loaded. After a
+        // re-render that usually means the list is still filling in, and
+        // ending a long run early is worse than waiting a few more seconds.
+        console.log("Select is back but no rows yet - checking once more before calling it done...");
+        realClick(findSelect());
+        await sleep(5000);
+        if (getIcons().length > 0) continue;
         console.log("Nothing left.");
       }
       break;
