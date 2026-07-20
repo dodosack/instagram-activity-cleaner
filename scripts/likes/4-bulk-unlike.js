@@ -96,8 +96,10 @@
   const DIALOG_AFTER  = 6000; // wait after pressing OK, before retrying the list
   const DIALOG_RETRY  = 2000; // re-check pause after a dialog (instead of the long SELECT_PAUSES)
   let justDismissed = false;  // set by dismissError, consumed by the select loop
+  let dialogSpent = 0;        // ms burned on the dialog this cycle - credited against the cycle pause
   const dismissError = async () => {
     if (!findOk()) return false;
+    const t0 = Date.now();
     console.warn(`'Something went wrong' dialog is up - waiting ${DIALOG_SETTLE / 1000}s, then pressing OK.`);
     await sleep(DIALOG_SETTLE);
     const ok = findOk();
@@ -109,6 +111,7 @@
     console.warn(`Pressed OK - waiting ${DIALOG_AFTER / 1000}s for the page to come back, then retrying.`);
     await sleep(DIALOG_AFTER);
     justDismissed = true; // keep the following re-checks short, not 5/8/12s
+    dialogSpent += Date.now() - t0; // waiting here counts towards the cycle pause
     return true;
   };
 
@@ -168,7 +171,9 @@
       const wait = justDismissed ? DIALOG_RETRY : SELECT_PAUSES[Math.min(att, SELECT_PAUSES.length) - 1];
       if (sb) realClick(sb);
       else console.log(`List not ready yet (attempt ${att}/${SELECT_RETRIES}) - waiting ${Math.round(wait / 1000)}s for the page to load...`);
-      await sleep(sb ? 1500 : wait);
+      const slept = sb ? 1500 : wait;
+      await sleep(slept);
+      if (justDismissed) dialogSpent += slept;
       icons = getIcons();
     }
     justDismissed = false;
@@ -284,7 +289,11 @@
     recoverTries = 0;
 
     // vary the pause; now and then take a longer break like a human would
-    await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE));
+    const base = Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE);
+    const pause = Math.max(DIALOG_AFTER, base - dialogSpent); // dialog time already was a pause
+    if (dialogSpent) console.log(`Pause ${Math.round(pause / 1000)}s (${Math.round(base / 1000)}s minus the ${Math.round(dialogSpent / 1000)}s already spent on the error dialog, never below ${DIALOG_AFTER / 1000}s).`);
+    dialogSpent = 0;
+    await sleep(pause);
   }
 
   window.fetch = __origFetch;
