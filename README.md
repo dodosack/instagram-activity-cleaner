@@ -122,11 +122,21 @@ const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
 const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
 const SELECT_RETRIES = 3;   // re-checks before concluding the list is empty
 const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits between re-checks (ms)
+const SORT_ORDER  = "auto"; // "auto" keeps what you set, "newest" / "oldest" force one
 const MAX_RETRIES = 1;      // backoff-and-retries on a 429 before stopping (see Limits)
+const RECOVER_500 = 1;      // in-place restore attempts after a 500 breaks the page (see Limits)
 ```
 
 Skipped items are not lost — they stay unselected and get picked up in a later
 cycle.
+
+**The sort order stays where you put it.** Instagram resets the list to its
+default *Newest to oldest* on every re-render — a reload, a tab switch, or the
+script's own recovery. With `SORT_ORDER = "auto"` the script reads whichever
+order is set when you start and puts that back whenever the page drops it. Set
+`"newest"` or `"oldest"` to force one instead; the script applies it before the
+first delete. If it cannot set the order twice in a row, it stops trying and
+carries on with whatever the page shows.
 
 **Slow reloads are not mistaken for "done."** After a bigger delete the page
 can take a while to re-render. If the list looks empty, the script re-checks
@@ -161,20 +171,25 @@ short run, regardless of batch size) Instagram starts throttling. This is not a
 bug in the script. The bulk scripts watch Instagram's requests and handle the
 two cases differently:
 
-- **`500` on the unlike/delete request** — the page is usually broken at that
-  point and only waiting helps. The script **stops immediately** with a clear
-  message instead of pretending the list is empty. Reload and wait 30-60+
-  minutes (sometimes longer) before running again.
+- **`500` on the unlike/delete request** — the page usually breaks here
+  (endless spinner). A reload would kill the script, so it waits 60-100s and
+  then switches to another tab and back, which makes Instagram re-render the
+  list in place, and continues (`RECOVER_500 = 1` attempt). If the page does
+  not come back, it **stops** with a clear message instead of pretending the
+  list is empty — then reload and wait 30-60+ minutes before running again.
 - **`429 Too Many Requests`** (on the action or on the "load more" pagination) —
   the script registers it, prints a warning, **backs off 1-2 minutes and
   retries once** (`MAX_RETRIES = 1`). If the 429 comes right back, it stops.
   Set `MAX_RETRIES = 0` to stop on the very first 429 instead.
 
-You can raise `MAX_RETRIES` to keep retrying through longer throttles.
-**Be careful:** that means sending actions after Instagram already told you to
-slow down, which is aggressive and can get your account temporarily blocked.
-Leave it at 1 unless you accept that risk. Smaller sessions and longer pauses
-make throttling happen less in the first place.
+You can raise `MAX_RETRIES` and `RECOVER_500` to ride out longer throttles, or
+set either to `-1` to retry **forever** (the script then never stops for that
+error class on its own). **Be careful:** that means sending actions after
+Instagram already told you to slow down, which is aggressive and can get your
+account temporarily blocked — especially `-1`, where only `window.__STOP__ =
+true` or a real block ends the run. Leave both at 1 unless you accept that
+risk. Smaller sessions and longer pauses make throttling happen less in the
+first place.
 
 ## Credits
 
