@@ -36,6 +36,9 @@
   const RECOVER_500  = 1;      // after a 500 breaks the page, try to restore it in place this many times (0 = stop immediately, -1 = keep trying forever)
   const RECOVER_MIN  = 60000;  // wait at least this long before the restore attempt (ms)
   const RECOVER_MAX  = 100000; // wait at most this long before the restore attempt (ms)
+  const EMPTY_RECOVERIES = 3;  // if the list vanishes with NO failed request (what a 429 leaves
+                               // behind), try the same tab switch this many times; -1 = keep trying.
+                               // Reset as soon as the list is back, so only failures count.
   // A 500 on the real delete action breaks the page - the script tries the
   // in-place tab-switch recovery (RECOVER_500 times), then stops. A 429 (Too
   // Many Requests) gets one backoff-and-retry by default; if it comes back,
@@ -48,6 +51,7 @@
   window.__STOP__ = false;
   const RETRY_LIMIT = MAX_RETRIES < 0 ? "unlimited" : MAX_RETRIES;
   const RECOVER_LIMIT = RECOVER_500 < 0 ? "unlimited" : RECOVER_500;
+  const EMPTY_LIMIT = EMPTY_RECOVERIES < 0 ? "unlimited" : EMPTY_RECOVERIES;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const rnd = (a, b) => a + Math.floor(Math.random() * (b - a));
 
@@ -174,11 +178,8 @@
     return els.length ? els[els.length - 1] : null; // last match = deepest element
   };
   let recoverTries = 0;
-  // The tab switch is also the last resort when the list is simply gone with no
-  // failed request behind it (see the 429 case below). Capped separately, so a
-  // genuinely empty list ends the run instead of switching tabs forever - that
-  // must hold even when RECOVER_500 is -1.
-  const EMPTY_RECOVERIES = 2;
+  // Counts only the tab switches that did NOT bring the list back (see the 429
+  // case below); a genuinely empty list must still end the run.
   let emptyRecoveries = 0;
   const tryRecover = async (err) => {
     actionError = null;
@@ -280,9 +281,9 @@
           // behind: the flag was consumed by the backoff, so nothing counts as
           // an error any more, and the page dropped the list anyway. Give it
           // the same tab switch the 500 path gets before concluding anything.
-          if (total > 0 && emptyRecoveries < EMPTY_RECOVERIES) {
+          if (total > 0 && (EMPTY_RECOVERIES < 0 || emptyRecoveries < EMPTY_RECOVERIES)) {
             emptyRecoveries++;
-            console.warn(`The list is gone but no request failed - trying the tab switch (${emptyRecoveries}/${EMPTY_RECOVERIES}) before giving up.`);
+            console.warn(`The list is gone but no request failed - trying the tab switch (${emptyRecoveries}/${EMPTY_LIMIT}) before giving up.`);
             if (await tryRecover("The list disappeared without a failed request")) continue;
           }
           console.log("Select gone. Either everything is removed, or Instagram rate-limited you (the page can break silently). If items remain, reload and wait before running again.");
@@ -299,6 +300,12 @@
       }
       break;
     }
+
+    // The list is back, so whatever we did worked. Both recovery budgets count
+    // ATTEMPTS THAT FAILED - a recovery that brought the page back must not
+    // spend one, or a long run dies on its second unrelated error.
+    recoverTries = 0;
+    emptyRecoveries = 0;
 
     // Select a randomized batch. Instagram keeps only ~25 rows in the DOM at a
     // time, so scroll to load more until we reach the target (or run out).
@@ -383,8 +390,6 @@
       continue;
     }
     errorStreak = 0;
-    recoverTries = 0;
-    emptyRecoveries = 0;
 
     // vary the pause; now and then take a longer break like a human would
     const base = Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE);

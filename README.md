@@ -125,6 +125,7 @@ const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits between re-checks
 const SORT_ORDER  = "auto"; // "auto" keeps what you set, "newest" / "oldest" force one
 const MAX_RETRIES = 1;      // backoff-and-retries on a 429 before stopping (see Limits)
 const RECOVER_500 = 1;      // in-place restore attempts after a 500 breaks the page (see Limits)
+const EMPTY_RECOVERIES = 3; // restore attempts when the list vanishes with no failed request
 ```
 
 Skipped items are not lost — they stay unselected and get picked up in a later
@@ -181,6 +182,14 @@ two cases differently:
   the script registers it, prints a warning, **backs off 1-2 minutes and
   retries once** (`MAX_RETRIES = 1`). If the 429 comes right back, it stops.
   Set `MAX_RETRIES = 0` to stop on the very first 429 instead.
+
+A 429 is handled and cleared before the backoff, so if the page then drops the
+list during that wait, no error is pending any more and nothing looks broken —
+the run would just end early. The scripts therefore try the same tab switch
+whenever the list vanishes without a failed request (`EMPTY_RECOVERIES = 3`).
+Both recovery budgets count *failed* attempts: a tab switch that brings the
+list back does not spend one, so a long run is not ended by its second
+unrelated error.
 
 You can raise `MAX_RETRIES` and `RECOVER_500` to ride out longer throttles, or
 set either to `-1` to retry **forever** (the script then never stops for that
